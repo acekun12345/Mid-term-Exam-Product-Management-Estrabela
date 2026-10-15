@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { initialProducts, sliderBanners } from './productData';
-import { Product } from './types';
+import type { Product } from './types';
 import { 
   Package, 
   ChevronLeft, 
@@ -14,13 +14,15 @@ import {
   X, 
   CheckCircle,
   Layers,
-  PlusCircle
+  PlusCircle,
+  Search
 } from 'lucide-react';
 import './App.css';
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [currentSlide, setCurrentSlide] = useState<number>(0);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [cart, setCart] = useState<{ [key: number]: number }>({});
@@ -47,15 +49,19 @@ export default function App() {
 
   // Quantity adjustments
   const handleIncreaseQty = (id: number) => {
-    setProducts(products.map(p => p.id === id ? { ...p, quantity: p.quantity + 1 } : p));
+    setProducts(current => current.map(p => p.id === id ? { ...p, quantity: p.quantity + 1 } : p));
   };
 
   const handleDecreaseQty = (id: number) => {
-    setProducts(products.map(p => p.id === id && p.quantity > 0 ? { ...p, quantity: p.quantity - 1 } : p));
+    setProducts(current => current.map(p => p.id === id && p.quantity > 0 ? { ...p, quantity: p.quantity - 1 } : p));
   };
 
   // Add to cart
   const handleAddToCart = (id: number) => {
+    const product = products.find(p => p.id === id);
+    if (!product || product.quantity === 0) return;
+
+    setProducts(current => current.map(p => p.id === id ? { ...p, quantity: p.quantity - 1 } : p));
     setCart(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
   };
 
@@ -63,35 +69,35 @@ export default function App() {
   const handleAddProduct = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!image || !name || !category || !description || !specification || !price || !quantity) {
+    if (!image.trim() || !name.trim() || !category || !description.trim() || !specification.trim() || !price || quantity === '') {
       setFormError('Please fill in all required fields before submitting.');
       setFormSuccess(false);
       return;
     }
 
-    const priceNum = parseFloat(price);
-    const qtyNum = parseInt(quantity, 10);
+    const priceNum = Number(price);
+    const qtyNum = Number(quantity);
 
-    if (isNaN(priceNum) || priceNum <= 0 || isNaN(qtyNum) || qtyNum < 0) {
-      setFormError('Please enter valid positive numbers for price and quantity.');
+    if (!Number.isFinite(priceNum) || priceNum <= 0 || !Number.isInteger(qtyNum) || qtyNum < 0) {
+      setFormError('Enter a price greater than zero and a whole-number quantity of zero or more.');
       setFormSuccess(false);
       return;
     }
 
     const newProd: Product = {
       id: Date.now(),
-      image,
-      name,
+      image: image.trim(),
+      name: name.trim(),
       category,
-      description,
-      specification,
+      description: description.trim(),
+      specification: specification.trim(),
       rating: Number(rating),
       price: priceNum,
       quantity: qtyNum,
       isFeatured
     };
 
-    setProducts([...products, newProd]);
+    setProducts(current => [...current, newProd]);
     setFormError('');
     setFormSuccess(true);
 
@@ -110,11 +116,17 @@ export default function App() {
   };
 
   // Filtered Products
-  const filteredProducts = selectedCategory === 'All'
-    ? products
-    : products.filter(p => p.category === selectedCategory);
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredProducts = products.filter(product => {
+    const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
+    const matchesSearch = !normalizedQuery
+      || `${product.name} ${product.category} ${product.description}`.toLowerCase().includes(normalizedQuery);
+    return matchesCategory && matchesSearch;
+  });
 
   const featuredProducts = products.filter(p => p.isFeatured);
+  const lowStockCount = products.filter(p => p.quantity < 5).length;
+  const cartCount = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
 
   // Computed Totals
   const overallTotal = products.reduce((acc, p) => acc + (p.price * p.quantity), 0);
@@ -122,10 +134,13 @@ export default function App() {
   return (
     <div className="app-wrapper">
       {/* 1. NAVIGATION HEADER */}
-      <nav className="navbar">
+      <nav className="navbar" aria-label="Main navigation">
         <div className="nav-brand">
-          <Package size={28} className="brand-icon" />
-          <h2>Product Manager App</h2>
+          <span className="brand-mark"><Package size={22} className="brand-icon" /></span>
+          <div>
+            <h2>Stockroom</h2>
+            <span className="brand-caption">PRODUCT WORKSPACE</span>
+          </div>
         </div>
         <div className="nav-menu">
           <a href="#slider">Home</a>
@@ -134,7 +149,8 @@ export default function App() {
           <a href="#add-new">Add New Product</a>
         </div>
         <div className="nav-total">
-          <span>Overall Total:</span>
+          <span className="cart-count"><ShoppingCart size={15} /> {cartCount} in cart</span>
+          <span className="nav-total-label">Inventory value</span>
           <strong>₱{overallTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>
         </div>
       </nav>
@@ -142,42 +158,80 @@ export default function App() {
       {/* 2. SLIDER SECTION */}
       <section id="slider" className="slider-section">
         <div className="slider-card" style={{ background: sliderBanners[currentSlide].bg }}>
-          <button className="slide-btn prev" onClick={prevSlide}><ChevronLeft size={24} /></button>
+          <button className="slide-btn prev" onClick={prevSlide} aria-label="Previous banner"><ChevronLeft size={22} /></button>
           <div className="slide-content">
+            <span className="eyebrow">YOUR INVENTORY, IN FOCUS</span>
             <h1>{sliderBanners[currentSlide].title}</h1>
             <p>{sliderBanners[currentSlide].subtitle}</p>
+            <a className="hero-link" href="#products">Explore products <ChevronRight size={16} /></a>
           </div>
-          <button className="slide-btn next" onClick={nextSlide}><ChevronRight size={24} /></button>
+          <button className="slide-btn next" onClick={nextSlide} aria-label="Next banner"><ChevronRight size={22} /></button>
+          <div className="slide-indicators" aria-label="Choose banner">
+            {sliderBanners.map((banner, index) => (
+              <button
+                key={banner.id}
+                className={index === currentSlide ? 'active' : ''}
+                onClick={() => setCurrentSlide(index)}
+                aria-label={`Show banner ${index + 1}`}
+                aria-current={index === currentSlide ? 'true' : undefined}
+              />
+            ))}
+          </div>
         </div>
       </section>
 
       {/* 3. FEATURED PRODUCTS SECTION */}
       <section id="featured" className="section-container">
-        <h2 className="section-title">Featured Products</h2>
+        <div className="section-heading">
+          <div>
+            <span className="section-kicker">HAND-PICKED FOR YOU</span>
+            <h2 className="section-title">Featured products</h2>
+          </div>
+          <a className="text-link" href="#products">View all products <ChevronRight size={16} /></a>
+        </div>
         <div className="featured-row">
           {featuredProducts.map((p) => (
-            <div key={p.id} className="featured-card">
-              <img src={p.image} alt={p.name} />
+            <button key={p.id} className="featured-card" onClick={() => setSelectedProduct(p)}>
+              <div className="featured-image"><img src={p.image} alt="" /></div>
               <div className="featured-info">
+                <span className="cat-badge">{p.category}</span>
                 <h4>{p.name}</h4>
                 <p className="price">₱{p.price.toLocaleString()}</p>
               </div>
-            </div>
+              <span className="featured-arrow"><ChevronRight size={17} /></span>
+            </button>
           ))}
+          {featuredProducts.length === 0 && <p className="empty-state">No featured products yet. Add one below to highlight it here.</p>}
         </div>
       </section>
 
       {/* 4. MAIN PRODUCTS SECTION WITH CATEGORY FILTER */}
       <section id="products" className="section-container">
         <div className="products-header">
-          <h2 className="section-title">Products</h2>
-          <div className="category-filter">
-            <Layers size={18} />
-            <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
-              {categories.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+          <div>
+            <span className="section-kicker">INVENTORY OVERVIEW</span>
+            <h2 className="section-title">Your products <span className="product-count">{products.length}</span></h2>
+            <p className="section-description">{lowStockCount} {lowStockCount === 1 ? 'item needs' : 'items need'} a restock</p>
+          </div>
+          <div className="product-tools">
+            <label className="search-field">
+              <Search size={17} />
+              <input
+                type="search"
+                placeholder="Search products..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search products"
+              />
+            </label>
+            <label className="category-filter">
+              <Layers size={17} />
+              <select aria-label="Filter by category" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+                {categories.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </label>
           </div>
         </div>
 
@@ -187,9 +241,9 @@ export default function App() {
             const isLowStock = product.quantity < 5;
 
             return (
-              <div key={product.id} className={`product-card ${isLowStock ? 'low-stock' : ''}`}>
+              <article key={product.id} className={`product-card ${isLowStock ? 'low-stock' : ''}`}>
                 {isLowStock && (
-                  <span className="low-stock-badge"><AlertTriangle size={12} /> Low Stock (&lt;5)</span>
+                  <span className="low-stock-badge"><AlertTriangle size={12} /> Low stock</span>
                 )}
                 <div className="img-holder">
                   <img src={product.image} alt={product.name} />
@@ -212,9 +266,9 @@ export default function App() {
                   <div className="qty-row">
                     <span>Quantity:</span>
                     <div className="qty-controls">
-                      <button onClick={() => handleDecreaseQty(product.id)} disabled={product.quantity === 0}><Minus size={14} /></button>
-                      <span>{product.quantity}</span>
-                      <button onClick={() => handleIncreaseQty(product.id)}><Plus size={14} /></button>
+                      <button aria-label={`Decrease ${product.name} stock`} onClick={() => handleDecreaseQty(product.id)} disabled={product.quantity === 0}><Minus size={14} /></button>
+                      <span aria-live="polite">{product.quantity}</span>
+                      <button aria-label={`Increase ${product.name} stock`} onClick={() => handleIncreaseQty(product.id)}><Plus size={14} /></button>
                     </div>
                   </div>
 
@@ -225,16 +279,24 @@ export default function App() {
 
                     {product.quantity > 0 ? (
                       <button className="btn-add-cart" onClick={() => handleAddToCart(product.id)}>
-                        <ShoppingCart size={16} /> Add to Cart {cart[product.id] ? `(${cart[product.id]})` : ''}
+                        <ShoppingCart size={16} /> Add to cart
                       </button>
                     ) : (
                       <button className="btn-out" disabled>Out of Stock</button>
                     )}
                   </div>
                 </div>
-              </div>
+              </article>
             );
           })}
+          {filteredProducts.length === 0 && (
+            <div className="empty-state products-empty">
+              <Search size={22} />
+              <strong>No products found</strong>
+              <span>Try a different search or category.</span>
+              <button onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }}>Clear filters</button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -250,17 +312,17 @@ export default function App() {
             <div className="form-grid">
               <div className="field">
                 <label>Feature Image URL *</label>
-                <input type="text" placeholder="https://..." value={image} onChange={(e) => setImage(e.target.value)} />
+                <input type="url" placeholder="https://..." value={image} onChange={(e) => setImage(e.target.value)} required />
               </div>
 
               <div className="field">
                 <label>Product Name *</label>
-                <input type="text" placeholder="Product Title" value={name} onChange={(e) => setName(e.target.value)} />
+                <input type="text" placeholder="Product Title" value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
 
               <div className="field">
                 <label>Category *</label>
-                <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                <select value={category} onChange={(e) => setCategory(e.target.value)} required>
                   <option value="Electronics">Electronics</option>
                   <option value="Apparel">Apparel</option>
                   <option value="Accessories">Accessories</option>
@@ -270,7 +332,7 @@ export default function App() {
 
               <div className="field">
                 <label>Rating (1-5) *</label>
-                <select value={rating} onChange={(e) => setRating(Number(e.target.value))}>
+                <select value={rating} onChange={(e) => setRating(Number(e.target.value))} required>
                   <option value={5}>5 Stars</option>
                   <option value={4}>4 Stars</option>
                   <option value={3}>3 Stars</option>
@@ -281,23 +343,23 @@ export default function App() {
 
               <div className="field">
                 <label>Price (₱) *</label>
-                <input type="number" placeholder="0.00" value={price} onChange={(e) => setPrice(e.target.value)} />
+                <input type="number" placeholder="0.00" min="0.01" step="any" value={price} onChange={(e) => setPrice(e.target.value)} required />
               </div>
 
               <div className="field">
                 <label>Initial Quantity *</label>
-                <input type="number" placeholder="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+                <input type="number" placeholder="0" min="0" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
               </div>
             </div>
 
             <div className="field full">
               <label>Description *</label>
-              <textarea rows={2} placeholder="Brief summary" value={description} onChange={(e) => setDescription(e.target.value)} />
+              <textarea rows={2} placeholder="Brief summary" value={description} onChange={(e) => setDescription(e.target.value)} required />
             </div>
 
             <div className="field full">
               <label>Specification *</label>
-              <textarea rows={2} placeholder="Specs details" value={specification} onChange={(e) => setSpecification(e.target.value)} />
+              <textarea rows={2} placeholder="Specs details" value={specification} onChange={(e) => setSpecification(e.target.value)} required />
             </div>
 
             <div className="checkbox-field">
@@ -313,13 +375,13 @@ export default function App() {
       {/* PRODUCT DETAILS MODAL */}
       {selectedProduct && (
         <div className="modal-backdrop" onClick={() => setSelectedProduct(null)}>
-          <div className="modal-body" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setSelectedProduct(null)}><X size={20} /></button>
+          <div className="modal-body" role="dialog" aria-modal="true" aria-labelledby="product-modal-title" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" aria-label="Close product details" onClick={() => setSelectedProduct(null)}><X size={20} /></button>
             <div className="modal-content">
               <img src={selectedProduct.image} alt={selectedProduct.name} />
               <div>
                 <span className="cat-badge">{selectedProduct.category}</span>
-                <h2>{selectedProduct.name}</h2>
+                <h2 id="product-modal-title">{selectedProduct.name}</h2>
                 <p className="modal-price">₱{selectedProduct.price.toLocaleString()}</p>
                 <p><strong>Description:</strong> {selectedProduct.description}</p>
                 <p><strong>Specification:</strong> {selectedProduct.specification}</p>
