@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { initialProducts, sliderBanners } from './productData';
 import type { Product } from './types';
 import { 
@@ -20,6 +20,9 @@ import {
 import './App.css';
 
 export default function App() {
+  const [showIntro, setShowIntro] = useState(
+    () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -131,29 +134,56 @@ export default function App() {
   // Computed Totals
   const overallTotal = products.reduce((acc, p) => acc + (p.price * p.quantity), 0);
 
+  useEffect(() => {
+    if (!showIntro) return;
+
+    const introTimeout = window.setTimeout(() => setShowIntro(false), 3200);
+    return () => window.clearTimeout(introTimeout);
+  }, [showIntro]);
+
   return (
-    <div className="app-wrapper">
-      {/* 1. NAVIGATION HEADER */}
-      <nav className="navbar" aria-label="Main navigation">
-        <div className="nav-brand">
-          <span className="brand-mark"><Package size={22} className="brand-icon" /></span>
-          <div>
-            <h2>Stockroom</h2>
-            <span className="brand-caption">PRODUCT WORKSPACE</span>
+    <>
+      {showIntro && (
+        <div className="store-intro" aria-hidden="true">
+          <div className="intro-glow intro-glow-left" />
+          <div className="intro-glow intro-glow-right" />
+          <div className="intro-orbit intro-orbit-outer" />
+          <div className="intro-orbit intro-orbit-inner" />
+          <div className="intro-content">
+            <div className="intro-mark"><Package size={25} strokeWidth={1.7} /></div>
+            <span className="intro-kicker">A LITTLE SOMETHING FOR EVERY DAY</span>
+            <h1 className="intro-title">
+              <span className="intro-welcome">WELCOME TO</span>
+              <span className="intro-store-name">MY PRODUCT STORE</span>
+            </h1>
+            <span className="intro-rule" />
+            <p className="intro-caption">Find your next favorite thing.</p>
           </div>
+          <span className="intro-index">YOUR NEXT FIND STARTS HERE <span /></span>
         </div>
-        <div className="nav-menu">
-          <a href="#slider">Home</a>
-          <a href="#featured">Featured</a>
-          <a href="#products">Products</a>
-          <a href="#add-new">Add New Product</a>
-        </div>
-        <div className="nav-total">
-          <span className="cart-count"><ShoppingCart size={15} /> {cartCount} in cart</span>
-          <span className="nav-total-label">Inventory value</span>
-          <strong>₱{overallTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>
-        </div>
-      </nav>
+      )}
+      <div className="app-wrapper">
+        {/* 1. NAVIGATION HEADER */}
+        <nav className="navbar" aria-label="Main navigation">
+          <div className="nav-brand">
+            <span className="brand-mark"><Package size={22} className="brand-icon" /></span>
+            <div>
+              <h2>Stockroom</h2>
+              <span className="brand-caption">PRODUCT WORKSPACE</span>
+            </div>
+          </div>
+          <div className="nav-menu">
+            <a href="#slider">Home</a>
+            <a href="#featured">Featured</a>
+            <a href="#products">Products</a>
+            <a href="#add-new">Add New Product</a>
+          </div>
+          <div className="nav-total">
+            <span className="cart-count"><ShoppingCart size={15} /> {cartCount} in cart</span>
+            <span className="nav-total-label">Inventory value</span>
+            <strong>₱{overallTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>
+          </div>
+        </nav>
 
       {/* 2. SLIDER SECTION */}
       <section id="slider" className="slider-section">
@@ -391,6 +421,7 @@ export default function App() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
